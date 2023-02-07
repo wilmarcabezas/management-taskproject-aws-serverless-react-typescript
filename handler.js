@@ -40,7 +40,6 @@ exports.nuevaFase = async (event) => {
     return { message: "Fase y tareas registradas exitosamente" };
 };
 
-
 exports.nuevaTarea = async (event) => {
     const tareasTable = "nombre_tabla_tareas";
     const idFase = event.idFase;
@@ -61,7 +60,6 @@ exports.nuevaTarea = async (event) => {
     
     return { message: "Tarea registrada exitosamente" };
 };
-
 
 exports.actualizaTarea = async (event) => {
     const tareasTable = "nombre_tabla_tareas";
@@ -122,4 +120,55 @@ exports.actualizaTarea = async (event) => {
     }
     
     return { message: "Estado de la tarea actualizado exitosamente" };
+};
+
+exports.eliminarTarea = async (event) => {
+  const idFase = event.idFase;
+
+  try {
+    // Eliminar la fase
+    const params = {
+      TableName: 'fases',
+      Key: {
+        id: { S: idFase },
+      },
+    };
+    await dynamoDB.deleteItem(params).promise();
+
+    // Eliminar todas las tareas asociadas a la fase
+    const tareasParams = {
+      TableName: 'tareas',
+      KeyConditionExpression: 'idFase = :idFase',
+      ExpressionAttributeValues: {
+        ':idFase': { S: idFase },
+      },
+    };
+    const tareasResult = await dynamoDB.query(tareasParams).promise();
+    const batchWritePromises = [];
+    tareasResult.Items.forEach((tarea) => {
+      const deleteParams = {
+        TableName: 'tareas',
+        Key: {
+          id: { S: tarea.id.S },
+          idFase: { S: tarea.idFase.S },
+        },
+      };
+      batchWritePromises.push(dynamoDB.deleteItem(deleteParams).promise());
+    });
+    await Promise.all(batchWritePromises);
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Fase y tareas eliminadas correctamente',
+      }),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: error.message,
+      }),
+    };
+  }
 };
